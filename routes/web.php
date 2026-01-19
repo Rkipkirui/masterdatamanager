@@ -8,3 +8,5 @@ Route::get('/', function () {
 });
 
 Route::resource('customers', CustomerController::class);
+Route::post('/customers/{customer}/send-to-sap', [CustomerController::class, 'sendToSap'])
+    ->name('customers.send-to-sap');

@@ -21,6 +21,9 @@ use App\Filament\Resources\CustomerResource\Pages;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use App\Filament\Resources\CustomerResource\RelationManagers;
 use Illuminate\Support\Facades\DB;
+//use Filament\Tables\Actions\Action;
+use Filament\Forms\Components\Actions\Action;
+use App\Services\SapService;
 use Filament\Forms\Components\{
     Section,
     Grid,
@@ -65,28 +68,55 @@ class CustomerResource extends Resource
 
                             Select::make('series_id')
                                 ->label('Series')
-                                ->relationship('customerSeries', 'series_name')
+                                ->options(
+                                    \App\Models\CustomerSeries::pluck('series_name', 'series')->toArray()
+                                )
+                                ->searchable()
+                                ->nullable()
                                 ->disabled()           // read-only - user cannot change it
-                                ->required()
-                                ->placeholder('Auto-filled based on Branch + Name'),
+                                ->required(),
+                                //->placeholder('Auto-filled based on Branch + Name'),
+
+                            // Select::make('series_id')
+                            //     ->label('Series')
+                            //     ->relationship('customerSeries', 'series_name')
+                            //     ->disabled()           // read-only - user cannot change it
+                            //     ->required()
+                            //     ->placeholder('Auto-filled based on Branch + Name'),
 
                             TextInput::make('code')
                                 ->label('Customer Code*')
-                                ->required()
+                                //->required()
                                 ->disabled()
                                 ->maxLength(50)
                                 ->unique(table: 'customers', ignoreRecord: true),
 
                             Select::make('group_id')
                                 ->label('Group')
-                                ->options(function () {
-                                    return DB::table('customer_groups')
-                                        ->where('group_type', 'C') // Only customer groups
-                                        ->pluck('name', 'id')
-                                        ->toArray();
-                                })
+                                ->options(
+                                    DB::table('customer_groups')->pluck('name', 'id')->toArray()
+                                )
+                                ->searchable()
                                 ->preload()
-                                ->searchable(),
+                                //->default('NORMAL DEBTOR (LA)')
+                                ->default(function () {
+                                    // default to "NORMAL DEBTOR (LA)" by finding its ID
+                                    return DB::table('customer_groups')
+                                        ->where('name', 'NORMAL DEBTOR (LA)')
+                                        ->value('id');
+                                }),
+
+                            // Select::make('group_id')
+                            //     ->label('Group')
+                            //     ->options(function () {
+                            //         return DB::table('customer_groups')
+                            //             ->where('group_type', 'C') // Only customer groups
+                            //             ->pluck('name', 'id')
+                            //             ->toArray();
+                            //     })
+                            //     ->preload()
+                            //     ->default('NORMAL DEBTOR (LA)')
+                            //     ->searchable(),
 
 
                             Select::make('currency_id')
@@ -94,7 +124,7 @@ class CustomerResource extends Resource
                                 ->getOptionLabelFromRecordUsing(fn($record) => "{$record->code} - {$record->name}")
                                 ->relationship('currency', 'code')
                                 ->preload()
-                                ->default('KES - Kenya Shillings')
+                                //->default('KES - Kenya Shillings')
                                 ->searchable(),
 
                             TextInput::make('pin')
@@ -113,14 +143,20 @@ class CustomerResource extends Resource
                             TextInput::make('tel2')->label('Tel 2'),
                             TextInput::make('mobile')->label('Mobile'),
 
-                            TextInput::make('email')->email()
+                            TextInput::make('email')
+                                ->label('Email')
                                 ->required()
-                                ->label('Email'),
+                                ->rule(fn($get) => function ($attribute, $value, $fail) {
+                                    if ($value === 'N/A') return; // allow "N/A"
+                                    if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                                        $fail('The ' . $attribute . ' must be a valid email address or N/A.');
+                                    }
+                                }),
 
                             /*   TextInput::make('contact_id')->label('Contact ID'),*/
 
                             TextInput::make('id_staff_no_2')->label('ID / Staff No. 2'),
-                            TextInput::make('contact_id')->label('Contact ID'),
+                            TextInput::make('contact_id')->label('Contact Person'),
 
                         ])
                     ]),
@@ -137,7 +173,7 @@ class CustomerResource extends Resource
                                 ->label('Country')
                                 ->preload()
                                 ->relationship('country', 'name')
-                                ->default('Kenya')
+                                //->default('Kenya')
                                 ->searchable(),
 
                         ])
@@ -151,7 +187,7 @@ class CustomerResource extends Resource
                                 ->label('Payment Terms')
                                 ->preload()
                                 ->relationship('paymentTerm', 'name')  // <-- method name here
-                                ->default('30 Days')
+                                //->default('30 Days')
                                 ->searchable(),
 
 
@@ -174,16 +210,17 @@ class CustomerResource extends Resource
                                 ->default('Debtors control Account - Local debtors')
                                 ->searchable(),
 
-
-
                             Select::make('dealer_category_id')
                                 ->label('Dealer Category')
                                 ->options(
                                     DealerCategory::orderBy('name')
-                                        ->pluck('name', 'id')
+                                        ->pluck('name', 'id') // key = id, value = name
                                         ->toArray()
                                 )
-                                ->default('-No Industry-')
+                                ->default(function () {
+                                    // default to "-No Industry-" ID
+                                    return DealerCategory::where('name', '-No Industry-')->value('id');
+                                })
                                 ->searchable(),
 
                             Select::make('dealer_type_id')
@@ -195,13 +232,14 @@ class CustomerResource extends Resource
                             Select::make('territory_id')
                                 ->label('Territory')
                                 ->preload()
-                                ->default('-No Territory-')
+                                //->default('-No Territory-')
                                 ->relationship('territory', 'name')
                                 ->searchable(),
 
                             TextInput::make('dealer_discount')
                                 ->label('Dealer Discount (%)')
                                 ->numeric()
+                                ->default(0)
                                 ->minValue(0)
                                 ->maxValue(100)
                                 ->suffix('%'),
@@ -304,5 +342,19 @@ class CustomerResource extends Resource
             ->first();
 
         $set('series_id', $series ? $series->id : null);
+    }
+
+    public static function getHeaderActions(): array
+    {
+        return [
+            \Filament\Actions\Action::make('send_to_sap')
+                ->label('Send to SAP')
+                ->button()
+                ->color('success')
+                ->action(function () {
+                    // This runs on the list page — usually not useful for create
+                    // Better to use form actions instead
+                }),
+        ];
     }
 }

@@ -101,6 +101,6 @@ class Customer extends Model
     // Customer.php
     public function customerSeries()
     {
-        return $this->belongsTo(CustomerSeries::class, 'series_id');
+        return $this->belongsTo(CustomerSeries::class, 'series_id', 'series');
     }
 }

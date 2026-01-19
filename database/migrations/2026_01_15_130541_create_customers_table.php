@@ -11,42 +11,41 @@ return new class extends Migration
         Schema::create('customers', function (Blueprint $table) {
             $table->id();
 
-            // Basic Info
-            $table->string('code')->unique();
+            // ==== Relations ====
+            $table->foreignId('branch_id')->nullable()->constrained('branches');
+            $table->string('series_id')->nullable(); // series as string for flexibility
+            $table->foreignId('group_id')->nullable()->constrained('customer_groups');
+            $table->foreignId('currency_id')->nullable()->constrained('currencies');
+            $table->foreignId('country_id')->nullable()->constrained('countries');
+            $table->foreignId('payment_term_id')->nullable()->constrained('payment_terms');
+            $table->foreignId('price_list_id')->nullable()->constrained('price_lists');
+            $table->foreignId('account_payable_id')->nullable()->constrained('account_payables');
+            $table->foreignId('dealer_category_id')->nullable()->constrained('dealer_categories');
+            $table->foreignId('dealer_type_id')->nullable()->constrained('dealer_types');
+            $table->foreignId('territory_id')->nullable()->constrained('territories');
+
+            // ==== Basic Info ====
+            $table->string('code')->unique()->nullable();
             $table->string('name');
-            $table->string('foreign_name')->nullable();
-            $table->string('group')->nullable();
-            $table->string('currency')->default('KES');
             $table->string('pin')->nullable();
 
-            // Contact Info
+            // ==== Contact Info ====
             $table->string('tel1')->nullable();
             $table->string('tel2')->nullable();
             $table->string('mobile')->nullable();
-            $table->string('fax')->nullable();
             $table->string('email')->nullable();
-            $table->string('website')->nullable();
+            $table->string('contact_id')->nullable();
+            $table->string('id_staff_no_2')->nullable();
+            $table->string('address_id')->nullable();
+            $table->string('po_box')->nullable();
+            $table->string('city')->nullable();
 
-            // Business Info
-            $table->string('shipping_type')->nullable();
-            $table->string('dealer_category')->nullable();
-            $table->string('type_of_business')->nullable(); 
-            $table->boolean('active')->default(true);
+            // ==== Business / Finance Info ====
+            $table->decimal('dealer_discount', 5, 2)->default(0);
 
-            // Account Info
-            $table->decimal('account_balance', 15, 2)->default(0);
-            $table->decimal('orders', 15, 2)->default(0);
-            $table->decimal('deliveries', 15, 2)->default(0);
-
-            // Approvals
-            $table->string('it_bl_approval')->default('Not Approved');
-            $table->string('gcm_approval')->default('Not Approved');
-            $table->string('credit_control_approval')->default('Not Approved');
-
-            // Optional: JSON fields
-            $table->json('trading_locations')->nullable();    // e.g., Nairobi, Mombasa…
-            $table->json('properties')->nullable();           // Custom properties / tabs
-            $table->json('attachments')->nullable();          // File paths or metadata
+            // Optional JSON fields
+            $table->json('properties')->nullable();
+            $table->json('attachments')->nullable();
 
             $table->timestamps();
         });

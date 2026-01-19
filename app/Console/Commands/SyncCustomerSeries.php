@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Services\SapService;
 use Illuminate\Console\Command;
 
-class SyncSapUsers extends Command
+class SyncCustomerSeries extends Command
 {
     protected $signature = 'sap:sync-customer-series';
     protected $description = 'Sync customer series from SAP to local database';

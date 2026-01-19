@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\SapUser;
-use Illuminate\Support\Facades\Http;
+use App\Models\Customer;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use phpDocumentor\Reflection\PseudoTypes\True_;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Arr;
 
 class SapService
 {
@@ -341,76 +343,146 @@ class SapService
     }
 
     public function syncPaymentTerms()
-{
-    $databaseName = env('SAP_COMPANY_DB');
+    {
+        $databaseName = env('SAP_COMPANY_DB');
 
-    $terms = DB::connection('sap_hana')->select("
+        $terms = DB::connection('sap_hana')->select("
         SELECT 
             T0.\"GroupNum\"   AS \"sap_group_num\",
             T0.\"PymntGroup\" AS \"name\"
         FROM \"{$databaseName}\".\"OCTG\" T0
     ");
 
-    foreach ($terms as $term) {
-        DB::table('payment_terms')->updateOrInsert(
-            ['sap_group_num' => $term->sap_group_num],
-            [
-                'name'       => $term->name,
-                'updated_at' => now(),
-            ]
-        );
+        foreach ($terms as $term) {
+            DB::table('payment_terms')->updateOrInsert(
+                ['sap_group_num' => $term->sap_group_num],
+                [
+                    'name'       => $term->name,
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        return count($terms);
     }
 
-    return count($terms);
-}
+    public function syncPriceLists()
+    {
+        $databaseName = env('SAP_COMPANY_DB');
 
-public function syncPriceLists()
-{
-    $databaseName = env('SAP_COMPANY_DB');
-
-    $lists = DB::connection('sap_hana')->select("
+        $lists = DB::connection('sap_hana')->select("
         SELECT T0.\"ListNum\", T0.\"ListName\"
         FROM \"{$databaseName}\".\"OPLN\" T0
     ");
 
-    foreach ($lists as $list) {
-        // Convert stdClass to array to avoid case issues
-        $arr = (array) $list;
+        foreach ($lists as $list) {
+            // Convert stdClass to array to avoid case issues
+            $arr = (array) $list;
 
-        DB::table('price_lists')->updateOrInsert(
-            ['code' => $arr['ListNum'] ?? $arr['LISTNUM']],   // whatever key exists
-            [
-                'name'       => $arr['ListName'] ?? $arr['LISTNAME'], // whatever key exists
-                'updated_at' => now(),
-            ]
-        );
+            DB::table('price_lists')->updateOrInsert(
+                ['code' => $arr['ListNum'] ?? $arr['LISTNUM']],   // whatever key exists
+                [
+                    'name'       => $arr['ListName'] ?? $arr['LISTNAME'], // whatever key exists
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        return count($lists);
     }
 
-    return count($lists);
-}
+    public function syncDealerCategories()
+    {
+        $databaseName = env('SAP_COMPANY_DB');
 
-public function syncDealerCategories()
-{
-    $databaseName = env('SAP_COMPANY_DB');
-
-    $categories = DB::connection('sap_hana')->select("
+        $categories = DB::connection('sap_hana')->select("
         SELECT 
             T0.\"IndCode\",
             T0.\"IndName\"
         FROM \"{$databaseName}\".\"OOND\" T0
     ");
 
-    foreach ($categories as $cat) {
-        DB::table('dealer_categories')->updateOrInsert(
-            ['code' => $cat->IndCode],       // <-- use exact property
-            [
-                'name'       => $cat->IndName, // <-- use exact property
-                'updated_at' => now(),
-            ]
-        );
+        foreach ($categories as $cat) {
+            DB::table('dealer_categories')->updateOrInsert(
+                ['code' => $cat->IndCode],       // <-- use exact property
+                [
+                    'name'       => $cat->IndName, // <-- use exact property
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        return count($categories);
     }
 
-    return count($categories);
-}
+    public function buildCustomerPayload(Customer $customer): array
+    {
+        return [
+            "CardCode" => $customer->code,
+            "CardName" => $customer->name,
+            "CardType" => "C",
+            "Series"     => $customer->series?->series ?? 0,
 
+            "Currency" => $customer->currency ?? "KES",
+
+            // Payment Terms
+            "GroupNum" => $customer->paymentTerm?->sap_group_num,
+
+            // Price List
+            "PriceListNum" => $customer->priceList?->code,
+
+            // Dealer Category (Industry)
+            "Industry" => $customer->dealerCategory?->code,
+
+            // Territory
+            "Territory" => $customer->territory?->code,
+
+            // Dealer Type (UDF)
+            "U_DealerType" => $customer->dealerType?->code,
+
+            // Properties (UDF or formatted string)
+            "U_Properties" => is_array($customer->properties)
+                ? collect($customer->properties)->pluck('code')
+                ->implode(',')
+                : '',
+
+
+
+            // Optional fields
+            "Phone1" => $customer->phone,
+            "E_Mail" => $customer->email,
+            "Address" => $customer->address,
+        ];
+    }
+
+    public function sendCustomerToSap(Customer $customer)
+    {
+        if (!$this->sessionId) {
+            $this->login();
+        }
+
+        $payload = $this->buildCustomerPayload($customer);
+
+        // 🔹 Inspect payload here
+        //dd($payload);
+
+        $response = Http::withoutVerifying()
+            ->withHeaders([
+                'Cookie' => "B1SESSION={$this->sessionId}",
+                'Content-Type' => 'application/json',
+            ])
+            ->post(rtrim(config('sap.base_url'), '/') . '/BusinessPartners', $payload);
+
+        if ($response->failed()) {
+            Log::error('SAP Customer Create Failed', [
+                'customer_id' => $customer->id,
+                'payload' => $payload,
+                'response' => $response->body(),
+            ]);
+
+            throw new \Exception('SAP customer creation failed: ' . $response->body());
+        }
+
+        return $response->json();
+    }
 }
