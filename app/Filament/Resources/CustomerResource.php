@@ -21,6 +21,8 @@ use App\Filament\Resources\CustomerResource\Pages;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use App\Filament\Resources\CustomerResource\RelationManagers;
 use Illuminate\Support\Facades\DB;
+use Filament\Resources\Pages\CreateRecord;
+use App\Models\PriceList;
 //use Filament\Tables\Actions\Action;
 use Filament\Forms\Components\Actions\Action;
 use App\Services\SapService;
@@ -35,6 +37,27 @@ class CustomerResource extends Resource
     protected static ?string $model = Customer::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    protected function afterCreate(): void
+    {
+        $customer = $this->record; // The newly created customer
+
+        try {
+            $sapService = app(SapService::class);
+            $sapService->sendCustomerToSap($customer);
+
+            \Filament\Notifications\Notification::make()
+                ->title('Customer posted to SAP successfully')
+                ->success()
+                ->send();
+        } catch (\Exception $e) {
+            \Filament\Notifications\Notification::make()
+                ->title('Failed to post customer to SAP')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
 
     public static function form(Form $form): Form
     {
@@ -233,24 +256,24 @@ class CustomerResource extends Resource
                                 ->searchable(),
 
 
-                            Select::make('price_list_name')
+                            // Price List
+                            // Price List
+                            Select::make('price_list_id')
                                 ->label('Price List')
-                                ->options(
-                                    \App\Models\PriceList::orderBy('name')->pluck('name', 'code')->toArray()
-                                )
-                                ->default(\App\Models\PriceList::where('name', 'Default Price list')->value('code'))
-                                ->searchable(),
+                                ->relationship('priceList', 'name') // Uses ID internally, shows name
+                                ->preload()
+                                ->searchable()
+                                ->default(fn($record) => $record?->price_list_id ?? \App\Models\PriceList::first()?->id)
+                                ->required(),
 
 
-                            Select::make('account_payable') // the column in customers table
+                            Select::make('account_payable_id') // matches DB column
                                 ->label('Account Payable')
-                                ->options(
-                                    AccountPayable::orderBy('account_name')
-                                        ->pluck('account_name', 'account_code')
-                                        ->toArray()
-                                )
-                                ->default(AccountPayable::where('account_name', 'Debtors control Account - Local debtors')->value('account_code'))
-                                ->searchable(),
+                                ->relationship('accountPayable', 'account_name') // Uses the relationship
+                                ->preload()
+                                ->searchable()
+                                ->default(fn($record) => $record?->account_payable_id ?? \App\Models\AccountPayable::first()?->id)
+                                ->required(),
 
                             Select::make('dealer_category_id')
                                 ->label('Dealer Category')
@@ -287,25 +310,7 @@ class CustomerResource extends Resource
                                 ->suffix('%'),
 
                         ])
-                            ->afterCreate(function (Customer $customer, array $data) {
-                                try {
-                                    $sapService = app(SapService::class);
 
-                                    // Optional: generate CardCode here if needed
-                                    $response = $sapService->sendCustomerToSap($customer);
-
-                                    \Filament\Notifications\Notification::make()
-                                        ->title('Customer posted to SAP successfully')
-                                        ->success()
-                                        ->send();
-                                } catch (\Exception $e) {
-                                    \Filament\Notifications\Notification::make()
-                                        ->title('Failed to post customer to SAP')
-                                        ->body($e->getMessage())
-                                        ->danger()
-                                        ->send();
-                                }
-                            })
                     ]),
 
                 Select::make('property_no')
@@ -318,12 +323,32 @@ class CustomerResource extends Resource
                     ->schema([
                         FileUpload::make('attachments')
                             ->multiple()
-                            ->directory('customer-attachments')
+                            ->directory('attachments')
                             ->preserveFilenames()
                             ->label('Attachments'),
                     ]),
 
             ]);
+        //     ->afterCreate(function (Customer $customer, array $data) {
+        //     try {
+        //         $sapService = app(SapService::class);
+
+        //         // Optional: generate CardCode here if needed
+        //         $sapService->sendCustomerToSap($customer);
+
+        //         \Filament\Notifications\Notification::make()
+        //             ->title('Customer posted to SAP successfully')
+        //             ->success()
+        //             ->send();
+        //     } catch (\Exception $e) {
+        //         \Filament\Notifications\Notification::make()
+        //             ->title('Failed to post customer to SAP')
+        //             ->body($e->getMessage())
+        //             ->danger()
+        //             ->send();
+        //     }
+        // })
+
     }
 
     public static function table(Table $table): Table

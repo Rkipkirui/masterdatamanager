@@ -34,7 +34,10 @@ class Customer extends Model
         'dealer_type_id',
         'territory_id',
         'dealer_discount',
-        'property_no'
+        'property_no',
+        'price_list_id',
+        'account_payable_id',
+
     ];
 
     // ===== Master Data Relationships =====
@@ -66,11 +69,12 @@ class Customer extends Model
 
     public function priceList()
     {
-        return $this->belongsTo(PriceList::class);
+        return $this->belongsTo(PriceList::class, 'price_list_id', 'id');
     }
+
     public function accountPayable()
     {
-        return $this->belongsTo(AccountPayable::class);
+        return $this->belongsTo(AccountPayable::class, 'account_payable_id', 'id');
     }
     public function dealerCategory()
     {
@@ -89,10 +93,10 @@ class Customer extends Model
     }
 
 
-    public function properties()
-    {
-        return $this->belongsToMany(Property::class, 'customer_property');
-    }
+    // public function properties()
+    // {
+    //     return $this->belongsToMany(Property::class, 'customer_property');
+    // }
 
     public function branch()
     {
@@ -112,7 +116,7 @@ class Customer extends Model
 
     public function property()
     {
-        return $this->belongsTo(Property::class, 'property_no', 'property_no');
+        return $this->belongsTo(Property::class, 'property_no', 'code');
     }
 
     protected static function booted()

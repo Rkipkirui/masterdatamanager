@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources\CustomerResource\Pages;
 
+use App\Filament\Resources\CustomerResource;
+use Filament\Resources\Pages\CreateRecord;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\CreateRecord;
-use App\Filament\Resources\CustomerResource;
 use App\Services\SapService;
 
 class CreateCustomer extends CreateRecord
@@ -15,37 +15,37 @@ class CreateCustomer extends CreateRecord
     protected function getFormActions(): array
     {
         return [
-            Action::make('create')
-                ->label('Create Customer')
-                ->submit('create'),
-
-            Action::make('send_to_sap')
-                ->label('Send to SAP')
-                ->button()
+            Action::make('create_and_send_to_sap')
+                ->label('Create Customer & Send to SAP')
                 ->color('success')
-                ->icon('heroicon-o-cloud-arrow-up')
-                ->action(function () {
-                    if (!$this->record) {
-                        Notification::make()
-                            ->warning()
-                            ->title('Please save first')
-                            ->body('Save the customer before sending to SAP.')
-                            ->send();
-                        return;
-                    }
-
-                    app(SapService::class)->sendCustomerToSap($this->record);
-
-                    Notification::make()
-                        ->success()
-                        ->title('Success')
-                        ->body('Customer successfully sent to SAP!')
-                        ->send();
-                })
+                ->icon('heroicon-o-check-circle')
+                ->submit('create') // ✅ IMPORTANT
                 ->requiresConfirmation()
-                ->modalHeading('Send to SAP')
-                ->modalDescription('This will post the customer to SAP. Are you sure?')
-                ->modalSubmitActionLabel('Yes, send now'),
+                ->modalHeading('Create Customer & Send to SAP')
+                ->modalDescription('This will save the customer and post it to SAP. Are you sure?')
+                ->modalSubmitActionLabel('Yes, proceed')
+                ->after(function () {   // ✅ Runs AFTER customer is created
+
+                    $customer = $this->record;
+
+                    try {
+                        app(SapService::class)->sendCustomerToSap($customer);
+
+                        Notification::make()
+                            ->success()
+                            ->title('Customer created & posted to SAP')
+                            ->send();
+
+                    } catch (\Exception $e) {
+
+                        Notification::make()
+                            ->danger()
+                            ->title('SAP Error')
+                            ->body($e->getMessage())
+                            ->send();
+                    }
+                }),
         ];
     }
 }
+

@@ -416,134 +416,139 @@ class SapService
     }
 
     public function buildCustomerPayload(Customer $customer, string $cardCode): array
-{
-    $payload = [
-        "CardCode" => $cardCode,                     // ← Use the generated one
-        "CardName" => $customer->name,
-        "CardType" => "C",
-        "Series"   => $customer->customerSeries?->series ?? 1,  // SAP numeric series ID
+    {
+        $payload = [
+            "CardCode" => $cardCode,                     // ← Use the generated one
+            "CardName" => $customer->name,
+            "CardType" => "C",
+            "Series"   => $customer->customerSeries?->series ?? 1,  // SAP numeric series ID
 
-        "Currency" => $customer->currency?->code ?? "KES",
+            "Currency" => $customer->currency?->code ?? "KES",
 
-        "FederalTaxID" => $customer->pin,
+            "FederalTaxID" => $customer->pin,
 
-        "Phone1" => $customer->tel1,
+            "Phone1" => $customer->tel1,
 
-        "Phone2" => $customer->tel2,
+            "Phone2" => $customer->tel2,
 
-        "Cellular" => $customer->mobile,
+            "Cellular" => $customer->mobile,
 
-        "EmailAddress" => $customer->email,
+            "EmailAddress" => $customer->email,
 
-        "ContactEmployees"=> [
-             [
-        "Name"=> $customer->contact_id,
-             ]
-        ],
+            "ContactEmployees" => [
+                [
+                    "Name" => $customer->contact_id,
+                ]
+            ],
 
-        // ✅ Addresses MUST be here
-    "BPAddresses" => [
-        [
+            // ✅ Addresses MUST be here
+            "BPAddresses" => [
+                [
 
-        "AddressName" => $customer->address_id ?? "Bill to",
+                    "AddressName" => $customer->address_id ?? "Bill to",
 
-        "Street" => $customer->po_box,
+                    "Street" => $customer->po_box,
 
-        "City" => $customer->city,
+                    "City" => $customer->city,
 
-        "Country" => $customer->country->code ?? "KE",
+                    "Country" => $customer->country->code ?? "KE",
 
-        "AddressType" => "bo_BillTo",
-         ]
-    ],
-    
+                    "AddressType" => "bo_BillTo",
+                ]
+            ],
 
-        // Payment Terms (SAP field is GroupNum)
-        "PayTermsGrpCode" => $customer->paymentTerm?->sap_group_num ?? 1,
 
-        // Price List
-        "PriceListNum"  => $customer->priceList?->code,
+            // Payment Terms (SAP field is GroupNum)
+            "PayTermsGrpCode" => $customer->paymentTerm?->sap_group_num ?? 1,
 
-        // Industry (Dealer Category)
-        "Industry" => $customer->dealerCategory?->code ?? '-1',
+            // Price List
+            "PriceListNum"  => $customer->priceList?->code,
 
-        // Territory
-        "Territory" => $customer->territory?->code,
+            // Industry (Dealer Category)
+            "Industry" => $customer->dealerCategory?->code ?? '-1',
 
-        "DebitorAccount" => $customer->accountPayable?->account_code,
-        
-        // UDF for Dealer Type
-        "U_DealearType" => $customer->dealerType?->code,
+            // Territory
+            "Territory" => $customer->territory?->code,
 
-        "U_DealerDiscount" => $customer->dealer_discount,
+            "DebitorAccount" => $customer->accountPayable?->account_code,
 
-        // Properties (mapped to Properties1–29 as tYES/tNO)
-        // Example: if customer has property_no = 5, set Properties5 = tYES
-        // Add more logic here if you have multiple properties
-    ];
+            "SubjectToWithholdingTax" => "N",
 
-    // Map selected property to SAP Properties1…Properties29 (example)
-    // --- SAP Properties mapping (1–64) ---
-    $selected = (int) $customer->property?->code;
+            // UDF for Dealer Type
+            "U_DealearType" => $customer->dealerType?->code,
 
-    for ($i = 1; $i <= 64; $i++) {
-        $payload["Properties{$i}"] = ($i === $selected) ? 'tYES' : 'tNO';
-    }
-    // for ($i = 1; $i <= 29; $i++) {
-    //     $payload["Properties{$i}"] = ($customer->property_no == $i) ? 'tYES' : 'tNO';
-    // }
+            "U_DealerDiscount" => $customer->dealer_discount,
 
-    return $payload;
-}
+            // Properties (mapped to Properties1–29 as tYES/tNO)
+            // Example: if customer has property_no = 5, set Properties5 = tYES
+            // Add more logic here if you have multiple properties
+        ];
 
-public function sendCustomerToSap(Customer $customer)
-{
-    if (!$this->sessionId) {
-        $this->login();
-    }
+        //dd($customer->property_no, $customer->property);
 
-    // Get series
-    $series = $customer->customerSeries;
-    if (!$series) {
-        throw new \Exception('No series assigned to customer. Cannot generate CardCode.');
+        // Map selected property to SAP Properties1…Properties29 (example)
+        // --- SAP Properties mapping (1–64) ---
+        $selected = (int) $customer->property?->code;
+
+        for ($i = 1; $i <= 64; $i++) {
+            $payload["Properties{$i}"] = ($i === $selected) ? 'tYES' : 'tNO';
+        }
+        // for ($i = 1; $i <= 29; $i++) {
+        //     $payload["Properties{$i}"] = ($customer->property_no == $i) ? 'tYES' : 'tNO';
+        // }
+         //dd($payload);
+
+        return $payload;
     }
 
-    // Generate CardCode using series
-    $nextNumber = str_pad($series->next_number, 5, '0', STR_PAD_LEFT);
-    $cardCode = $series->series_name . $nextNumber;  // e.g. "C-KIT-T0003"
+    public function sendCustomerToSap(Customer $customer)
+    {
+        if (!$this->sessionId) {
+            $this->login();
+        }
 
-    // Optional: Check if CardCode already exists in SAP
-    // try {
-    //     $this->call('GET', "BusinessPartners('{$cardCode}')");
-    //     throw new \Exception("CardCode '{$cardCode}' already exists in SAP");
-    // } catch (\Exception $e) {
-    //     if (!str_contains($e->getMessage(), '404')) {
-    //         throw $e; // real error
-    //     }
-    //     // 404 = does not exist → good
-    // }
+        // Get series
+        $series = $customer->customerSeries;
+        if (!$series) {
+            throw new \Exception('No series assigned to customer. Cannot generate CardCode.');
+        }
 
-    $payload = $this->buildCustomerPayload($customer, $cardCode);
+        // Generate CardCode using series
+        $nextNumber = str_pad($series->next_number, 5, '0', STR_PAD_LEFT);
+        $cardCode = $series->series_name . $nextNumber;  // e.g. "C-KIT-T0003"
 
-    Log::info('Posting customer to SAP', [
-        'card_code' => $cardCode,
-        'payload'   => $payload,
-    ]);
+        // Optional: Check if CardCode already exists in SAP
+        // try {
+        //     $this->call('GET', "BusinessPartners('{$cardCode}')");
+        //     throw new \Exception("CardCode '{$cardCode}' already exists in SAP");
+        // } catch (\Exception $e) {
+        //     if (!str_contains($e->getMessage(), '404')) {
+        //         throw $e; // real error
+        //     }
+        //     // 404 = does not exist → good
+        // }
 
-    $response = $this->call('POST', 'BusinessPartners', $payload);
+        $payload = $this->buildCustomerPayload($customer, $cardCode);
 
-    // SUCCESS: Increment series next_number
-    $series->increment('next_number');
-    $series->save();
+        Log::info('Posting customer to SAP', [
+            'card_code' => $cardCode,
+            'payload'   => $payload,
+        ]);
 
-    Log::info('SAP customer created successfully', [
-        'card_code' => $cardCode,
-        'sap_id'    => $response['Code'] ?? 'unknown'
-    ]);
+        $response = $this->call('POST', 'BusinessPartners', $payload);
 
-    // Update local customer with final CardCode (in case it was different)
-    $customer->update(['code' => $cardCode]);
+        // SUCCESS: Increment series next_number
+        $series->increment('next_number');
+        $series->save();
 
-    return $response;
-}
+        Log::info('SAP customer created successfully', [
+            'card_code' => $cardCode,
+            'sap_id'    => $response['Code'] ?? 'unknown'
+        ]);
+
+        // Update local customer with final CardCode (in case it was different)
+        $customer->update(['code' => $cardCode]);
+
+        return $response;
+    }
 }
