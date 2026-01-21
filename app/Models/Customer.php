@@ -33,7 +33,8 @@ class Customer extends Model
         'dealer_category_id',
         'dealer_type_id',
         'territory_id',
-        'dealer_discount'
+        'dealer_discount',
+        'property_no'
     ];
 
     // ===== Master Data Relationships =====
@@ -99,8 +100,34 @@ class Customer extends Model
     }
 
     // Customer.php
+    // public function customerSeries()
+    // {
+    //     return $this->belongsTo(CustomerSeries::class, 'series_id', 'id');
+    // }
+
     public function customerSeries()
     {
         return $this->belongsTo(CustomerSeries::class, 'series_id', 'series');
+    }
+
+    public function property()
+    {
+        return $this->belongsTo(Property::class, 'property_no', 'property_no');
+    }
+
+    protected static function booted()
+    {
+        static::creating(function ($model) {
+            // Debug BEFORE save
+            //dd($model->attributesToArray());
+        });
+
+        static::saving(function ($customer) {
+
+            if (!empty($customer->sap_series)) {
+                // Force SAP series into series_id
+                $customer->series_id = $customer->sap_series;
+            }
+        });
     }
 }

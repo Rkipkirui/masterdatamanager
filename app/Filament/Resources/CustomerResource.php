@@ -66,30 +66,68 @@ class CustomerResource extends Resource
                                     self::autoFillSeries($set, $get);
                                 }),
 
-                            Select::make('series_id')
-                                ->label('Series')
-                                ->options(
-                                    \App\Models\CustomerSeries::pluck('series_name', 'series')->toArray()
-                                )
-                                ->searchable()
-                                ->nullable()
-                                ->disabled()           // read-only - user cannot change it
-                                ->required(),
-                                //->placeholder('Auto-filled based on Branch + Name'),
-
-                            // Select::make('series_id')
+                            // TextInput::make('series_id')
                             //     ->label('Series')
-                            //     ->relationship('customerSeries', 'series_name')
-                            //     ->disabled()           // read-only - user cannot change it
+                            //     ->options(\App\Models\CustomerSeries::pluck('series', 'id')->toArray()) // key = id
+                            //     ->searchable()
+                            //     ->preload()
+                            //     ->dehydrated(true)
+                            //     //->disabled()           // read-only
                             //     ->required()
+                            //     ->getOptionLabelUsing(fn($value) => \App\Models\CustomerSeries::find($value)?->series_name ?? $value)
+                            //     ->default(fn($record) => $record?->series_id)
+                            //     ->afterStateHydrated(function ($component, $state, $record) {
+                            //         if ($record && $record->series_id) {
+                            //             $component->state($record->series_id);
+                            //         }
+                            //     })
+                            //     ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            //         if ($state) {
+                            //             $series = \App\Models\CustomerSeries::find($state);
+                            //             if ($series && $series->next_number !== null) {
+                            //                 $nextNum = str_pad($series->next_number, 4, '0', STR_PAD_LEFT);
+                            //                 $set('code', $series->series_name . $nextNum);
+                            //             }
+                            //         } else {
+                            //             $set('code', null);
+                            //         }
+                            //     })
                             //     ->placeholder('Auto-filled based on Branch + Name'),
+                            //     //->hint('Stored value = SAP series number (e.g. 1142)'),
+
+                            TextInput::make('series_id')
+                                ->label('Series Code')
+                                ->disabled()             // Prevents manual selection
+                                ->dehydrated(true)       // Ensures it is sent to the database on save
+                                ->reactive()
+                                ->afterStateUpdated(function ($state, callable $set) {
+                                    if ($state) {
+                                        // State is the SAP code (e.g., 1141). We fetch the record to update the display and code.
+                                        $series = \App\Models\CustomerSeries::where('series', $state)->first();
+
+                                        if ($series) {
+                                            $nextNum = str_pad($series->next_number, 4, '0', STR_PAD_LEFT);
+                                            $set('code', $series->series_name . $nextNum);
+                                            $set('series_display', $series->series_name);
+                                        }
+                                    }
+                                }),
+
+                            // TextInput::make('series_display')
+                            //     ->label('Series Name')
+                            //     ->disabled()
+                            //     ->dehydrated(false), // Only for UI display
+
+
 
                             TextInput::make('code')
-                                ->label('Customer Code*')
+                                ->label('Customer Code')
                                 //->required()
-                                ->disabled()
+                                ->disabled()  // prevent manual edit
                                 ->maxLength(50)
-                                ->unique(table: 'customers', ignoreRecord: true),
+                                ->unique(table: 'customers', ignoreRecord: true)
+                                ->placeholder('Auto-generated from Series (e.g. C-KIT-T0003)')
+                                ->dehydrated(fn($state) => !empty($state)),
 
                             Select::make('group_id')
                                 ->label('Group')
@@ -165,8 +203,12 @@ class CustomerResource extends Resource
                     ->schema([
                         Grid::make(3)->schema([
 
-                            TextInput::make('address_id')->label('Address ID'),
-                            TextInput::make('po_box')->label('P.O. Box'),
+                            TextInput::make('address_id')
+                                ->placeholder('Bill to')
+                                ->label('Address ID'),
+                            TextInput::make('po_box')
+                                ->placeholder('P.O. Box')
+                                ->label('P.O. Box'),
                             TextInput::make('city')->label('City'),
 
                             Select::make('country_id')
@@ -194,9 +236,9 @@ class CustomerResource extends Resource
                             Select::make('price_list_name')
                                 ->label('Price List')
                                 ->options(
-                                    \App\Models\PriceList::orderBy('name')->pluck('name', 'name')->toArray()
+                                    \App\Models\PriceList::orderBy('name')->pluck('name', 'code')->toArray()
                                 )
-                                ->default('Default Price list')
+                                ->default(\App\Models\PriceList::where('name', 'Default Price list')->value('code'))
                                 ->searchable(),
 
 
@@ -204,10 +246,10 @@ class CustomerResource extends Resource
                                 ->label('Account Payable')
                                 ->options(
                                     AccountPayable::orderBy('account_name')
-                                        ->pluck('account_name', 'account_name')
+                                        ->pluck('account_name', 'account_code')
                                         ->toArray()
                                 )
-                                ->default('Debtors control Account - Local debtors')
+                                ->default(AccountPayable::where('account_name', 'Debtors control Account - Local debtors')->value('account_code'))
                                 ->searchable(),
 
                             Select::make('dealer_category_id')
@@ -245,15 +287,32 @@ class CustomerResource extends Resource
                                 ->suffix('%'),
 
                         ])
+                            ->afterCreate(function (Customer $customer, array $data) {
+                                try {
+                                    $sapService = app(SapService::class);
+
+                                    // Optional: generate CardCode here if needed
+                                    $response = $sapService->sendCustomerToSap($customer);
+
+                                    \Filament\Notifications\Notification::make()
+                                        ->title('Customer posted to SAP successfully')
+                                        ->success()
+                                        ->send();
+                                } catch (\Exception $e) {
+                                    \Filament\Notifications\Notification::make()
+                                        ->title('Failed to post customer to SAP')
+                                        ->body($e->getMessage())
+                                        ->danger()
+                                        ->send();
+                                }
+                            })
                     ]),
 
-                Select::make('properties')
-                    ->label('Properties')
-                    //->multiple()
-                    ->relationship('properties', 'name')
-                    ->preload()
-                    ->searchable(),
-
+                Select::make('property_no')
+                    ->label('Property')
+                    ->options(\App\Models\Property::pluck('name', 'code'))
+                    ->searchable()
+                    ->preload(),
 
                 Section::make('Attachments')
                     ->schema([
@@ -341,7 +400,7 @@ class CustomerResource extends Resource
             ->where('series_name', 'like', $pattern)
             ->first();
 
-        $set('series_id', $series ? $series->id : null);
+        $set('series_id', $series ? $series->series : null);
     }
 
     public static function getHeaderActions(): array

@@ -21,13 +21,13 @@ class CustomerSeries extends Model
      *
      * @return string
      */
-    public function getNextCardCode(): string
-    {
-        $cardCode = $this->series_name . '-' . str_pad($this->next_number, 5, '0', STR_PAD_LEFT);
+    // public function getNextCardCode(): string
+    // {
+    //     $cardCode = $this->series_name . '-' . str_pad($this->next_number, 5, '0', STR_PAD_LEFT);
 
-        // Increment the next number
-        $this->increment('next_number');
+    //     // Increment the next number
+    //     $this->increment('next_number');
 
-        return $cardCode;
-    }
+    //     return $cardCode;
+    // }
 }

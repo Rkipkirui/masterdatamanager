@@ -13,7 +13,7 @@ class CustomerController extends Controller
     public function sendToSap(Customer $customer, SapService $sapService)
     {
         // Optional: dd payload to debug
-        // dd($sapService->buildCustomerPayload($customer));
+        dd($sapService->buildCustomerPayload($customer));
 
         $response = $sapService->sendCustomerToSap($customer);
 

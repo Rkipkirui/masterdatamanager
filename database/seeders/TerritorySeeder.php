@@ -11,19 +11,19 @@ class TerritorySeeder extends Seeder
     {
         $territories = [
             ['code' => '-1', 'name' => '-No Territory-'],
-            ['code' => 'BUNGOMA', 'name' => 'BUNGOMA'],
-            ['code' => 'ELDORET', 'name' => 'ELDORET'],
-            ['code' => 'KISII', 'name' => 'KISII'],
-            ['code' => 'KISUMU TRADING', 'name' => 'KISUMU TRADING'],
-            ['code' => 'KITALE', 'name' => 'KITALE'],
-            ['code' => 'KITENGELA', 'name' => 'KITENGELA'],
-            ['code' => 'MALINDI', 'name' => 'MALINDI'],
-            ['code' => 'MOMBASA', 'name' => 'MOMBASA'],
-            ['code' => 'MRF', 'name' => 'MRF'],
-            ['code' => 'NAIROBI TRADING', 'name' => 'NAIROBI TRADING'],
-            ['code' => 'NAKURU TRADING', 'name' => 'NAKURU TRADING'],
-            ['code' => 'THIKA', 'name' => 'THIKA'],
-            ['code' => 'VOI', 'name' => 'VOI'],
+            ['code' => '1', 'name' => 'BUNGOMA'],
+            ['code' => '2', 'name' => 'ELDORET'],
+            ['code' => '3', 'name' => 'KISII'],
+            ['code' => '4', 'name' => 'KISUMU TRADING'],
+            ['code' => '5', 'name' => 'KITALE'],
+            ['code' => '6', 'name' => 'KITENGELA'],
+            ['code' => '7', 'name' => 'MALINDI'],
+            ['code' => '8', 'name' => 'MOMBASA'],            
+            ['code' => '9', 'name' => 'NAIROBI TRADING'],
+            ['code' => '10', 'name' => 'NAKURU TRADING'],
+            ['code' => '11', 'name' => 'THIKA'],
+            ['code' => '12', 'name' => 'VOI'],
+            ['code' => '13', 'name' => 'MRF'],
         ];
 
         foreach ($territories as $territory) {
