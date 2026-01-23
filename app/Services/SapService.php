@@ -496,59 +496,79 @@ class SapService
         // for ($i = 1; $i <= 29; $i++) {
         //     $payload["Properties{$i}"] = ($customer->property_no == $i) ? 'tYES' : 'tNO';
         // }
-         //dd($payload);
+        //dd($payload);
 
         return $payload;
     }
 
-    public function sendCustomerToSap(Customer $customer)
-    {
-        if (!$this->sessionId) {
-            $this->login();
-        }
-
-        // Get series
-        $series = $customer->customerSeries;
-        if (!$series) {
-            throw new \Exception('No series assigned to customer. Cannot generate CardCode.');
-        }
-
-        // Generate CardCode using series
-        $nextNumber = str_pad($series->next_number, 5, '0', STR_PAD_LEFT);
-        $cardCode = $series->series_name . $nextNumber;  // e.g. "C-KIT-T0003"
-
-        // Optional: Check if CardCode already exists in SAP
-        // try {
-        //     $this->call('GET', "BusinessPartners('{$cardCode}')");
-        //     throw new \Exception("CardCode '{$cardCode}' already exists in SAP");
-        // } catch (\Exception $e) {
-        //     if (!str_contains($e->getMessage(), '404')) {
-        //         throw $e; // real error
-        //     }
-        //     // 404 = does not exist → good
-        // }
-
-        $payload = $this->buildCustomerPayload($customer, $cardCode);
-
-        Log::info('Posting customer to SAP', [
-            'card_code' => $cardCode,
-            'payload'   => $payload,
-        ]);
-
-        $response = $this->call('POST', 'BusinessPartners', $payload);
-
-        // SUCCESS: Increment series next_number
-        $series->increment('next_number');
-        $series->save();
-
-        Log::info('SAP customer created successfully', [
-            'card_code' => $cardCode,
-            'sap_id'    => $response['Code'] ?? 'unknown'
-        ]);
-
-        // Update local customer with final CardCode (in case it was different)
-        $customer->update(['code' => $cardCode]);
-
-        return $response;
+public function sendCustomerToSap(Customer $customer)
+{
+    if (!$this->sessionId) {
+        $this->login();
     }
+
+    $series = $customer->customerSeries;
+    if (!$series) {
+        throw new \Exception('No series assigned to customer. Cannot generate CardCode.');
+    }
+
+    // Generate CardCode
+    $nextNumber = str_pad($series->next_number, 5, '0', STR_PAD_LEFT);
+    $cardCode = $series->series_name . $nextNumber;
+
+    // ---------- Handle attachments FIRST ----------
+    $attachmentPath = null;
+
+    if (!empty($customer->attachments)) {
+
+        $sapPhysicalRootFolder = '\\\\192.168.1.3\\b1_shf\\ATTACHMENT_FOLDER\\EOH_CGTL_LIVE\\';
+
+        foreach ($customer->attachments as $storedPath) {
+
+            $fileLocalPath = storage_path('app/public/' . $storedPath);
+
+            if (!file_exists($fileLocalPath)) {
+                Log::error("Attachment file not found locally: {$fileLocalPath}");
+                continue;
+            }
+
+            $filenameWithExt = basename($fileLocalPath);
+            $sapPhysicalFilePath = $sapPhysicalRootFolder . $filenameWithExt;
+
+            if (!copy($fileLocalPath, $sapPhysicalFilePath)) {
+                throw new \Exception("Failed to copy file to SAP share: {$sapPhysicalFilePath}");
+            }
+
+            Log::info("Successfully copied file to SAP share: {$sapPhysicalFilePath}");
+
+            $attachmentPath = $sapPhysicalFilePath;
+            break; // take first attachment only (or remove for multiple)
+        }
+    }
+
+    // ---------- Build payload ----------
+    $payload = $this->buildCustomerPayload($customer, $cardCode);
+
+    if ($attachmentPath) {
+        $payload['U_AttachmentPath'] = $attachmentPath;
+    }
+
+    // ---------- Create customer ----------
+    $response = $this->call('POST', 'BusinessPartners', $payload);
+
+    // ---------- Finalize ----------
+    $series->increment('next_number');
+    $series->save();
+
+    $customer->update(['code' => $cardCode]);
+
+    Log::info('SAP customer created successfully', [
+        'card_code' => $cardCode,
+        'sap_id' => $response['Code'] ?? 'unknown'
+    ]);
+
+    return $response;
+}
+
+
 }

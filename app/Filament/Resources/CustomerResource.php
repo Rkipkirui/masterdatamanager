@@ -322,33 +322,27 @@ class CustomerResource extends Resource
                 Section::make('Attachments')
                     ->schema([
                         FileUpload::make('attachments')
+                            ->label('Attachments')
                             ->multiple()
-                            ->directory('attachments')
-                            ->preserveFilenames()
-                            ->label('Attachments'),
+                            ->directory('attachments')           // files go to storage/app/attachments
+                            ->preserveFilenames()                // keep original names (careful with security/duplicates)
+                            ->enableDownload()
+                            ->enableOpen()
+                            ->disk('public')                      // optional – 'local' is default anyway
+                            ->visibility('public')              // or 'public' – your choice
+                            ->afterStateHydrated(function (FileUpload $component, $record) {
+                                // Important for edit: load existing paths from DB
+                                if ($record) {
+                                    $component->state($record->attachments ?? []);
+                                }
+                            })
+                        // No need for getStateForStorageUsing() – Filament already stores array of paths
+                        // No need for getUploadedFileNameForStorageUsing() unless you want to rename files
+                        // (you already have preserveFilenames() which achieves similar result)
                     ]),
 
+
             ]);
-        //     ->afterCreate(function (Customer $customer, array $data) {
-        //     try {
-        //         $sapService = app(SapService::class);
-
-        //         // Optional: generate CardCode here if needed
-        //         $sapService->sendCustomerToSap($customer);
-
-        //         \Filament\Notifications\Notification::make()
-        //             ->title('Customer posted to SAP successfully')
-        //             ->success()
-        //             ->send();
-        //     } catch (\Exception $e) {
-        //         \Filament\Notifications\Notification::make()
-        //             ->title('Failed to post customer to SAP')
-        //             ->body($e->getMessage())
-        //             ->danger()
-        //             ->send();
-        //     }
-        // })
-
     }
 
     public static function table(Table $table): Table

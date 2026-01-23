@@ -13,10 +13,15 @@ return [
     |
     */
 
+    // 'defaults' => [
+    //     'guard' => env('AUTH_GUARD', 'web'),
+    //     'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
+    // ],
     'defaults' => [
-        'guard' => env('AUTH_GUARD', 'web'),
-        'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
+        'guard' => 'sap',
+        'passwords' => 'users', // keep as-is
     ],
+
 
     /*
     |--------------------------------------------------------------------------
@@ -39,6 +44,10 @@ return [
         'web' => [
             'driver' => 'session',
             'provider' => 'users',
+        ],
+        'sap' => [
+            'driver' => 'session',
+            'provider' => 'sap_users',
         ],
     ],
 
@@ -63,6 +72,10 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
+        ],
+        'sap_users' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\SapUser::class,
         ],
 
         // 'users' => [

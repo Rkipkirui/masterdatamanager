@@ -37,8 +37,14 @@ class Customer extends Model
         'property_no',
         'price_list_id',
         'account_payable_id',
+        'attachments'
 
     ];
+
+    protected $casts = [
+        'attachments' => 'array',
+    ];
+
 
     // ===== Master Data Relationships =====
 
